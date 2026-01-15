@@ -1,4 +1,15 @@
 [profile.default]
 src = "src"
 out = "out"
+test = "test"
 libs = ["lib"]
+solc_version = "0.8.30"
+via_ir = true
+optimizer = true
+optimizer_runs = 200
+evm_version = "cancun"
+
+remappings = [
+    "solmate/=lib/solmate/src/",
+    "forge-std/=lib/forge-std/src/"
+]
