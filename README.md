@@ -5,6 +5,7 @@ Contains solidity smart contracts specifically designed to benchmark EVM executi
 # Usage
 
 ```
+cd contracts
 forge build
 jq -r '.bytecode.object' out/Groth16Verifier.sol/Groth16Verifier.json
 ```
