@@ -30,6 +30,40 @@ contract MockCTFExchange is IExchange, ERC1155TokenReceiver {
     /// @notice EIP712 domain separator
     bytes32 public immutable DOMAIN_SEPARATOR;
 
+    /// @notice Dummy operator mapping to simulate access control gas costs
+    mapping(address => bool) public operators;
+
+    /// @notice Dummy pause flag to simulate access control gas costs
+    bool public paused;
+
+    /// @notice Dummy reentrancy status to simulate ReentrancyGuard gas costs
+    uint256 private _reentrancyStatus;
+
+    /// @notice Dummy max fee rate to simulate fee validation gas costs
+    uint256 public maxFeeRate;
+
+    /// @notice Emitted when an order is filled
+    event OrderFilled(
+        bytes32 indexed orderHash,
+        address indexed maker,
+        address indexed taker,
+        uint256 makerAssetId,
+        uint256 takerAssetId,
+        uint256 makerAmountFilled,
+        uint256 takerAmountFilled,
+        uint256 fee
+    );
+
+    /// @notice Emitted when orders are matched
+    event OrdersMatched(
+        bytes32 indexed takerOrderHash,
+        address indexed takerOrderMaker,
+        uint256 makerAssetId,
+        uint256 takerAssetId,
+        uint256 makerAmountFilled,
+        uint256 takerAmountFilled
+    );
+
     /// @notice Order typehash for EIP712
     bytes32 public constant ORDER_TYPEHASH = keccak256(
         "Order(uint256 salt,address maker,address signer,address taker,uint256 tokenId,uint256 makerAmount,uint256 takerAmount,uint256 expiration,uint256 nonce,uint256 feeRateBps,uint8 side,uint8 signatureType)"
@@ -76,6 +110,11 @@ contract MockCTFExchange is IExchange, ERC1155TokenReceiver {
         uint256 takerFillAmount,
         uint256[] memory makerFillAmounts
     ) external override {
+        // Simulate access control checks
+        operators[msg.sender];      // onlyOperator check
+        paused;                     // notPaused check
+        _reentrancyStatus;          // nonReentrant check
+
         require(makerOrders.length == makerFillAmounts.length, "Length mismatch");
 
         // Hash and update taker order status (storage operations)
@@ -85,6 +124,12 @@ contract MockCTFExchange is IExchange, ERC1155TokenReceiver {
         // We call ecrecover with the real hash but dummy v,r,s values.
         // The call executes and burns gas even though it returns address(0).
         _simulateSignatureVerification(takerHash);
+
+        // Simulate order validation reads
+        nonces[takerOrder.maker];           // nonce validation
+        tokenConditions[takerOrder.tokenId]; // token validation
+        maxFeeRate;                          // fee rate validation
+
         OrderStatus storage takerStatus = orderStatus[takerHash];
 
         // Simulate validation - read existing state
@@ -112,6 +157,11 @@ contract MockCTFExchange is IExchange, ERC1155TokenReceiver {
             // Simulate signature verification gas cost for maker
             _simulateSignatureVerification(makerHash);
 
+            // Simulate order validation reads for maker
+            nonces[makerOrder.maker];           // nonce validation
+            tokenConditions[makerOrder.tokenId]; // token validation
+            maxFeeRate;                          // fee rate validation
+
             OrderStatus storage makerStatus = orderStatus[makerHash];
 
             if (!makerStatus.isFilledOrCancelled) {
@@ -135,14 +185,25 @@ contract MockCTFExchange is IExchange, ERC1155TokenReceiver {
                 ERC20(collateralToken).transferFrom(makerOrder.maker, takerOrder.maker, makerFillAmount);
                 // Transfer CTF from taker to maker
                 ERC1155(ctfToken).safeTransferFrom(takerOrder.maker, makerOrder.maker, makerOrder.tokenId, makerReceiveAmount, "");
+
+                // Emit OrderFilled event for maker order
+                emit OrderFilled(makerHash, makerOrder.maker, takerOrder.maker, 0, makerOrder.tokenId, makerFillAmount, makerReceiveAmount, 0);
             } else {
                 // Maker is selling CTF for collateral
                 // Transfer CTF from maker to taker
                 ERC1155(ctfToken).safeTransferFrom(makerOrder.maker, takerOrder.maker, makerOrder.tokenId, makerFillAmount, "");
                 // Transfer collateral from taker to maker
                 ERC20(collateralToken).transferFrom(takerOrder.maker, makerOrder.maker, makerReceiveAmount);
+
+                // Emit OrderFilled event for maker order
+                emit OrderFilled(makerHash, makerOrder.maker, takerOrder.maker, makerOrder.tokenId, 0, makerFillAmount, makerReceiveAmount, 0);
             }
         }
+
+        // Emit OrdersMatched event for taker order
+        uint256 takerAssetId = takerOrder.side == Side.BUY ? 0 : takerOrder.tokenId;
+        uint256 makerAssetId = takerOrder.side == Side.BUY ? takerOrder.tokenId : 0;
+        emit OrdersMatched(takerHash, takerOrder.maker, makerAssetId, takerAssetId, takerFillAmount, totalTakerReceive);
     }
 
     /// @notice Simulate signature verification gas cost without actual validation
