@@ -80,6 +80,11 @@ contract MockCTFExchange is IExchange, ERC1155TokenReceiver {
 
         // Hash and update taker order status (storage operations)
         bytes32 takerHash = hashOrder(takerOrder);
+
+        // Simulate signature verification gas cost (~3000 gas per ecrecover)
+        // We call ecrecover with the real hash but dummy v,r,s values.
+        // The call executes and burns gas even though it returns address(0).
+        _simulateSignatureVerification(takerHash);
         OrderStatus storage takerStatus = orderStatus[takerHash];
 
         // Simulate validation - read existing state
@@ -103,6 +108,10 @@ contract MockCTFExchange is IExchange, ERC1155TokenReceiver {
 
             // Hash and update maker order status
             bytes32 makerHash = hashOrder(makerOrder);
+
+            // Simulate signature verification gas cost for maker
+            _simulateSignatureVerification(makerHash);
+
             OrderStatus storage makerStatus = orderStatus[makerHash];
 
             if (!makerStatus.isFilledOrCancelled) {
@@ -134,6 +143,15 @@ contract MockCTFExchange is IExchange, ERC1155TokenReceiver {
                 ERC20(collateralToken).transferFrom(takerOrder.maker, makerOrder.maker, makerReceiveAmount);
             }
         }
+    }
+
+    /// @notice Simulate signature verification gas cost without actual validation
+    /// @dev ecrecover costs ~3000 gas even with invalid inputs (returns address(0))
+    /// @param orderHash The EIP712 hash of the order
+    function _simulateSignatureVerification(bytes32 orderHash) internal pure {
+        // Use dummy v, r, s values - ecrecover will return address(0) but still burn ~3000 gas
+        // v=27 is a valid recovery id, r and s are arbitrary non-zero values
+        ecrecover(orderHash, 27, bytes32(uint256(1)), bytes32(uint256(1)));
     }
 
     /// @notice Hash an order for EIP712 signature
